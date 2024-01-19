@@ -1,12 +1,16 @@
 import os.path
+import time
 
 import requests
 import collections
+
+# url para as jpgs https://uploads.mangadex.org/covers/:manga-id/:cover-filename
 
 URL = 'https://api.mangadex.dev/'
 DICT_REQUESTS = {'manga': '/manga',
                  'chapter': '/chapter',
                  'cover': '/cover'}
+URL_UPLOAD = 'https://uploads.mangadex.org/covers/'
 
 
 class ApiFetcher:
@@ -52,6 +56,7 @@ class ApiFetcher:
             return dict_manga
 
 
+
 class Manga(ApiFetcher):
     def __init__(self, manga_name):
         self.manga_data = self.set_manga_data(manga_name)
@@ -61,11 +66,34 @@ class Manga(ApiFetcher):
         self.status = self.manga_data['status']
         self.cover_dict = self.get_cover(self.id)
 
-    def download_covers(self):
-        pass
+    def download_image(self, url, filename, retries=3):
+        for _ in range(retries):
+            try:
+                response = requests.get(url, stream=True)
+                if response.status_code == 200:
+                    with open(filename, 'wb') as file:
+                        print(f"Downloading {filename}...")
+                        for chuck in response.iter_content(1024):
+                            file.write(chuck)
+                return
+            except requests.exceptions.ChunkedEncodingError as e:
+                print(f"Download failed for {url}, error {e} retrying...")
+                time.sleep(1)
+        print(f"Failed to download image from {url} after {retries} attempts")
+
+    def download_images(self, url_lists, folder_path):
+        for i, url in enumerate(url_lists):
+            filename = os.path.join(folder_path, f'{self.title}_cover_vol{i}.jpg')
+            self.download_image(url, filename)
+
+    def download_covers(self, folder_path):
+        url_list = [URL_UPLOAD + f"{self.id}/{cover_filename}" for cover_filename in self.cover_dict.values()]
+        self.download_images(url_list, folder_path)
 
 
 jujutsu = Manga('jujutsu kaisen')
+jujutsu.download_covers('cover')
+
 
 print(jujutsu.cover_dict)
 
