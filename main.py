@@ -8,7 +8,7 @@ import collections
 
 URL = 'https://api.mangadex.dev/'
 DICT_REQUESTS = {'manga': '/manga',
-                 'chapter': '/chapter',
+                 'chapter': '/feed',
                  'cover': '/cover'}
 URL_UPLOAD = 'https://uploads.mangadex.org/covers/'
 
@@ -23,7 +23,8 @@ class ApiFetcher:
             return None
 
     def get_chapters(self, manga_id):
-        response = requests.get(f"{URL}{DICT_REQUESTS['manga']}/{manga_id}{DICT_REQUESTS['chapter']}")
+        params = {'translatedLanguage[]':'en'}
+        response = requests.get(f"{URL}{DICT_REQUESTS['manga']}/{manga_id}{DICT_REQUESTS['chapter']}", params=params)
         if response.status_code == 200:
             return response.json()['data']
         else:
@@ -56,6 +57,15 @@ class ApiFetcher:
             return dict_manga
 
 
+class Chapter:
+    def __init__(self, chapter_data):
+        self.id = chapter_data['id']
+        self.title = chapter_data['attributes']['title']
+        self.volume = chapter_data['attributes']['volume']
+        self.chapter = chapter_data['attributes']['chapter']
+        self.pages = chapter_data['attributes']['pages']
+        self.publish_date = chapter_data['attributes']['publishAt']
+
 
 class Manga(ApiFetcher):
     def __init__(self, manga_name):
@@ -65,12 +75,15 @@ class Manga(ApiFetcher):
         self.year = self.manga_data['year']
         self.status = self.manga_data['status']
         self.cover_dict = self.get_cover(self.id)
+        self.chapters = [Chapter(chapter_data) for chapter_data in self.get_chapters(self.id)]
 
     def download_image(self, url, filename, retries=3):
         for _ in range(retries):
             try:
                 response = requests.get(url, stream=True)
                 if response.status_code == 200:
+                    for char in [' ', ':', ';', '+', '-']:
+                        filename = filename.replace(char, '_')
                     with open(filename, 'wb') as file:
                         print(f"Downloading {filename}...")
                         for chuck in response.iter_content(1024):
@@ -84,6 +97,8 @@ class Manga(ApiFetcher):
     def download_images(self, url_lists, folder_path):
         for i, url in enumerate(url_lists):
             filename = os.path.join(folder_path, f'{self.title}_cover_vol{i}.jpg')
+            for char in [' ', ':', ';', '+', '-']:
+                filename = filename.replace(char, '_')
             self.download_image(url, filename)
 
     def download_covers(self, folder_path):
@@ -92,8 +107,7 @@ class Manga(ApiFetcher):
 
 
 jujutsu = Manga('jujutsu kaisen')
-jujutsu.download_covers('cover')
-
 
 print(jujutsu.cover_dict)
-
+for chapter in jujutsu.chapters:
+    print(f"id: {chapter.id} volume: {chapter.volume} title: {chapter.title} chapter: {chapter.chapter}")
